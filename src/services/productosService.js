@@ -1,24 +1,38 @@
-import { supabase } from "./supabase";
+import { supabase } from "../utils/supabase";
 
 /**
  * Obtener todos los productos activos con sus categorías
  */
 export const getProductos = async () => {
   try {
+    console.log("🔹 getProductos: Iniciando query a Supabase...");
+
     const { data, error } = await supabase
       .from("productos")
       .select(
-        "id, codigo_barras, nombre, descripcion, precio_venta, stock_actual, unidad_medida, categoria_id, categorias(id, nombre)",
+        `
+        id,
+        codigo_barras,
+        nombre,
+        descripcion,
+        precio_venta,
+        stock_actual,
+        unidad_medida,
+        categoria_id,
+        imagen_url,
+        categorias(id, nombre)
+      `,
       )
       .eq("activo", true)
       .order("nombre");
 
     if (error) {
-      console.error("Error al obtener productos:", error);
+      console.error("🔹 getProductos: ERROR en query:", error);
       return [];
     }
 
-    // Transformar los datos para compatibilidad con el frontend
+    console.log("🔹 getProductos: Query exitosa:", data);
+
     return data.map((producto) => ({
       id: producto.id,
       codigo_barras: producto.codigo_barras,
@@ -29,10 +43,14 @@ export const getProductos = async () => {
       unidad: producto.unidad_medida,
       categoria_id: producto.categoria_id,
       categoria: producto.categorias?.nombre || "Sin categoría",
-      imagen: `https://via.placeholder.com/200x200?text=${encodeURIComponent(producto.nombre)}`,
+
+      // ✅ IMAGEN REAL
+      imagen:
+        producto.imagen_url ||
+        "https://via.placeholder.com/200x200?text=Sin+Imagen",
     }));
   } catch (error) {
-    console.error("Error en getProductos:", error);
+    console.error("🔹 getProductos: ERROR no esperado:", error);
     return [];
   }
 };
@@ -45,7 +63,18 @@ export const getProductoById = async (id) => {
     const { data, error } = await supabase
       .from("productos")
       .select(
-        "id, codigo_barras, nombre, descripcion, precio_venta, stock_actual, unidad_medida, categoria_id, categorias(id, nombre)",
+        `
+        id,
+        codigo_barras,
+        nombre,
+        descripcion,
+        precio_venta,
+        stock_actual,
+        unidad_medida,
+        categoria_id,
+        imagen_url,
+        categorias(id, nombre)
+      `,
       )
       .eq("id", id)
       .eq("activo", true)
@@ -66,7 +95,11 @@ export const getProductoById = async (id) => {
       unidad: data.unidad_medida,
       categoria_id: data.categoria_id,
       categoria: data.categorias?.nombre || "Sin categoría",
-      imagen: `https://via.placeholder.com/200x200?text=${encodeURIComponent(data.nombre)}`,
+
+      // ✅ IMAGEN REAL
+      imagen:
+        data.imagen_url ||
+        "https://via.placeholder.com/200x200?text=Sin+Imagen",
     };
   } catch (error) {
     console.error("Error en getProductoById:", error);
@@ -82,7 +115,18 @@ export const getProductosByCategoria = async (categoriaId) => {
     const { data, error } = await supabase
       .from("productos")
       .select(
-        "id, codigo_barras, nombre, descripcion, precio_venta, stock_actual, unidad_medida, categoria_id, categorias(id, nombre)",
+        `
+        id,
+        codigo_barras,
+        nombre,
+        descripcion,
+        precio_venta,
+        stock_actual,
+        unidad_medida,
+        categoria_id,
+        imagen_url,
+        categorias(id, nombre)
+      `,
       )
       .eq("categoria_id", categoriaId)
       .eq("activo", true)
@@ -103,7 +147,11 @@ export const getProductosByCategoria = async (categoriaId) => {
       unidad: producto.unidad_medida,
       categoria_id: producto.categoria_id,
       categoria: producto.categorias?.nombre || "Sin categoría",
-      imagen: `https://via.placeholder.com/200x200?text=${encodeURIComponent(producto.nombre)}`,
+
+      // ✅ IMAGEN REAL
+      imagen:
+        producto.imagen_url ||
+        "https://via.placeholder.com/200x200?text=Sin+Imagen",
     }));
   } catch (error) {
     console.error("Error en getProductosByCategoria:", error);
@@ -112,14 +160,25 @@ export const getProductosByCategoria = async (categoriaId) => {
 };
 
 /**
- * Buscar productos por término de búsqueda
+ * Buscar productos
  */
 export const buscarProductos = async (searchTerm) => {
   try {
     const { data, error } = await supabase
       .from("productos")
       .select(
-        "id, codigo_barras, nombre, descripcion, precio_venta, stock_actual, unidad_medida, categoria_id, categorias(id, nombre)",
+        `
+        id,
+        codigo_barras,
+        nombre,
+        descripcion,
+        precio_venta,
+        stock_actual,
+        unidad_medida,
+        categoria_id,
+        imagen_url,
+        categorias(id, nombre)
+      `,
       )
       .eq("activo", true)
       .or(
@@ -142,7 +201,11 @@ export const buscarProductos = async (searchTerm) => {
       unidad: producto.unidad_medida,
       categoria_id: producto.categoria_id,
       categoria: producto.categorias?.nombre || "Sin categoría",
-      imagen: `https://via.placeholder.com/200x200?text=${encodeURIComponent(producto.nombre)}`,
+
+      // ✅ IMAGEN REAL
+      imagen:
+        producto.imagen_url ||
+        "https://via.placeholder.com/200x200?text=Sin+Imagen",
     }));
   } catch (error) {
     console.error("Error en buscarProductos:", error);
@@ -151,15 +214,19 @@ export const buscarProductos = async (searchTerm) => {
 };
 
 /**
- * Actualizar stock de un producto (interno)
+ * Actualizar stock
  */
-export const actualizarStockProducto = async (productoId, nuevaCantidad) => {
+export const actualizarStockProducto = async (
+  productoId,
+  nuevaCantidad,
+) => {
   try {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("productos")
-      .update({ stock_actual: nuevaCantidad })
-      .eq("id", productoId)
-      .select();
+      .update({
+        stock_actual: nuevaCantidad,
+      })
+      .eq("id", productoId);
 
     if (error) {
       console.error("Error al actualizar stock:", error);

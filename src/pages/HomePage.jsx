@@ -25,13 +25,15 @@ export const HomePage = () => {
         setLoading(true);
         const productosData = await loadProducts();
         setProducts(productosData);
+
         if (productosData.length === 0) {
+          console.warn("⚠️ HomePage: Supabase retornó lista vacía");
           setError(
             "No hay productos disponibles. Por favor, verifica tu conexión a Supabase.",
           );
         }
       } catch (err) {
-        console.error("Error cargando productos:", err);
+        console.error("❌ HomePage: Error cargando productos:", err);
         setError(
           "Error al cargar productos. Verifica tu configuración de Supabase.",
         );

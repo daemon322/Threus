@@ -70,7 +70,13 @@ const Categories = () => {
               className="bg-white rounded-xl shadow p-4 flex flex-col items-center hover:shadow-md transition-shadow cursor-pointer h-full"
               whileHover={{ y: -5 }}
             >
-              <div className="text-3xl mb-2">📦</div>
+              <div className="w-20 h-20 mb-3">
+                <img
+                  src={category.imagen_url || "https://via.placeholder.com/100"}
+                  alt={category.nombre}
+                  className="w-full h-full object-cover rounded-xl"
+                />
+              </div>
               <h3 className="font-medium text-gray-800 text-center text-sm line-clamp-2">
                 {category.nombre}
               </h3>

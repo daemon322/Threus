@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase } from "../utils/supabase";
 
 /**
  * Crear una nueva venta y sus detalles

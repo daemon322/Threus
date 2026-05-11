@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase } from "../utils/supabase";
 
 /**
  * Obtener todas las categorías activas
@@ -7,8 +7,7 @@ export const getCategorias = async () => {
   try {
     const { data, error } = await supabase
       .from("categorias")
-      .select("id, nombre, descripcion")
-      .eq("activo", true)
+      .select("id, nombre, descripcion, imagen_url")
       .order("nombre");
 
     if (error) {
@@ -30,9 +29,8 @@ export const getCategoriaById = async (id) => {
   try {
     const { data, error } = await supabase
       .from("categorias")
-      .select("id, nombre, descripcion")
+      .select("id, nombre, descripcion, imagen_url")
       .eq("id", id)
-      .eq("activo", true)
       .single();
 
     if (error) {

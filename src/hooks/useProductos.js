@@ -1,28 +1,21 @@
 import { useState, useEffect } from "react";
 import { loadProducts, invalidateProductCache } from "../data/products";
 
-/**
- * Hook personalizado para cargar productos desde Supabase
- * @returns {Object} { productos, loading, error, recargar }
- */
 export const useProductos = () => {
   const [productos, setProductos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const recargar = async () => {
+  const cargarProductos = async ({ forceRefresh = false } = {}) => {
     setLoading(true);
     setError(null);
-    invalidateProductCache();
 
     try {
-      const data = await loadProducts();
+      const data = await loadProducts({ forceRefresh });
+      setProductos(data);
+
       if (data.length === 0) {
-        setError(
-          "No hay productos disponibles. Verifica tu conexión a Supabase.",
-        );
-      } else {
-        setProductos(data);
+        setError("No hay productos disponibles.");
       }
     } catch (err) {
       setError(`Error al cargar productos: ${err.message}`);
@@ -32,8 +25,13 @@ export const useProductos = () => {
     }
   };
 
+  const recargar = async () => {
+    invalidateProductCache();
+    await cargarProductos({ forceRefresh: true });
+  };
+
   useEffect(() => {
-    recargar();
+    cargarProductos();
   }, []);
 
   return { productos, loading, error, recargar };

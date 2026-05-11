@@ -1,94 +1,128 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { crearVenta } from "../services/ventasService";
 import { useAuth } from "./AuthContext";
 
-const CartContext = createContext();
+const CartContext = createContext(null);
 
 export const useCart = () => useContext(CartContext);
 
+const ANONYMOUS_KEY = "cart_anonymous";
+
+const readCart = (key) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error("Error leyendo carrito:", error);
+    return [];
+  }
+};
+
+const writeCart = (key, cart) => {
+  try {
+    if (cart.length > 0) {
+      localStorage.setItem(key, JSON.stringify(cart));
+    } else {
+      localStorage.removeItem(key);
+    }
+  } catch (error) {
+    console.error("Error guardando carrito:", error);
+  }
+};
+
+const mergeCarts = (baseCart = [], extraCart = []) => {
+  const merged = baseCart.map((item) => ({ ...item }));
+
+  for (const extraItem of extraCart) {
+    const index = merged.findIndex((item) => item.id === extraItem.id);
+
+    if (index >= 0) {
+      merged[index] = {
+        ...merged[index],
+        quantity: (merged[index].quantity || 0) + (extraItem.quantity || 0),
+      };
+    } else {
+      merged.push({ ...extraItem });
+    }
+  }
+
+  return merged;
+};
+
 export const CartProvider = ({ children }) => {
-  const { user, isAuthenticated } = useAuth();
+  const { session, usuario, authState, estaAutenticado } = useAuth();
+
   const [cart, setCart] = useState([]);
   const [creatingVenta, setCreatingVenta] = useState(false);
   const [ventaError, setVentaError] = useState(null);
   const [ventaSuccess, setVentaSuccess] = useState(null);
-  const [isInitialized, setIsInitialized] = useState(false);
 
-  // 🔵 INICIALIZAR CARRITO AL MONTAR O CUANDO CAMBIA LA AUTENTICACIÓN
+  const hydratedRef = useRef(false);
+
+  const userId = session?.user?.id || null;
+  const storageKey = userId ? `cart_${userId}` : ANONYMOUS_KEY;
+
   useEffect(() => {
-    const initializeCart = async () => {
-      if (isAuthenticated && user) {
-        // Usuario autenticado: cargar desde BD (si está disponible en el futuro)
-        // Por ahora, usar localStorage también
-        const savedCart = localStorage.getItem(`cart_${user.id}`);
-        if (savedCart) {
-          try {
-            setCart(JSON.parse(savedCart));
-          } catch (err) {
-            console.error("Error al parsear carrito guardado:", err);
-            setCart([]);
-          }
-        }
+    if (authState === "checking") return;
+
+    const anonymousCart = readCart(ANONYMOUS_KEY);
+
+    if (userId) {
+      const userCart = readCart(`cart_${userId}`);
+
+      if (userCart.length > 0 && anonymousCart.length > 0) {
+        const merged = mergeCarts(userCart, anonymousCart);
+        setCart(merged);
+        writeCart(`cart_${userId}`, merged);
+        localStorage.removeItem(ANONYMOUS_KEY);
+      } else if (userCart.length > 0) {
+        setCart(userCart);
+      } else if (anonymousCart.length > 0) {
+        setCart(anonymousCart);
+        writeCart(`cart_${userId}`, anonymousCart);
+        localStorage.removeItem(ANONYMOUS_KEY);
       } else {
-        // Usuario NO autenticado: cargar desde localStorage general
-        const savedCart = localStorage.getItem("cart_anonymous");
-        if (savedCart) {
-          try {
-            setCart(JSON.parse(savedCart));
-          } catch (err) {
-            console.error("Error al parsear carrito guardado:", err);
-            setCart([]);
-          }
-        }
-      }
-      setIsInitialized(true);
-    };
-
-    initializeCart();
-  }, [isAuthenticated, user]);
-
-  // 🔵 GUARDAR CARRITO EN LOCALSTORAGE CUANDO CAMBIA
-  useEffect(() => {
-    if (!isInitialized) return;
-
-    if (isAuthenticated && user) {
-      // Usuario autenticado: guardar con su ID
-      if (cart.length > 0) {
-        localStorage.setItem(`cart_${user.id}`, JSON.stringify(cart));
-      } else {
-        localStorage.removeItem(`cart_${user.id}`);
+        setCart([]);
       }
     } else {
-      // Usuario NO autenticado: guardar carrito anónimo
-      if (cart.length > 0) {
-        localStorage.setItem("cart_anonymous", JSON.stringify(cart));
-      } else {
-        localStorage.removeItem("cart_anonymous");
-      }
+      setCart(anonymousCart);
     }
-  }, [cart, isAuthenticated, user, isInitialized]);
 
-  // Solo aumenta la cantidad en 1
+    hydratedRef.current = true;
+  }, [authState, userId]);
+
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    if (authState === "checking") return;
+
+    writeCart(storageKey, cart);
+  }, [cart, storageKey, authState]);
+
   const addToCart = (product) => {
     setCart((prev) => {
       const exists = prev.find((item) => item.id === product.id);
+
       if (exists) {
         return prev.map((item) =>
           item.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
+            ? { ...item, quantity: (item.quantity || 0) + 1 }
             : item,
         );
       }
+
       return [...prev, { ...product, quantity: 1 }];
     });
   };
 
-  // Disminuye la cantidad en 1, elimina si llega a 0
   const decreaseFromCart = (id) => {
     setCart((prev) =>
       prev
         .map((item) =>
-          item.id === id ? { ...item, quantity: item.quantity - 1 } : item,
+          item.id === id
+            ? { ...item, quantity: (item.quantity || 0) - 1 }
+            : item,
         )
         .filter((item) => item.quantity > 0),
     );
@@ -98,18 +132,10 @@ export const CartProvider = ({ children }) => {
     setCart((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const clearCart = () => setCart([]);
+  const clearCart = () => {
+    setCart([]);
+  };
 
-  /**
-   * Procesar la venta en Supabase
-   * @param {Object} ventaConfig - Configuración de la venta
-   * @param {string} ventaConfig.usuario_id - ID del usuario/cajero
-   * @param {string} ventaConfig.cliente_id - ID del cliente (opcional)
-   * @param {string} ventaConfig.forma_pago_id - ID de la forma de pago
-   * @param {number} ventaConfig.descuento - Descuento total (opcional)
-   * @param {number} ventaConfig.iva - IVA calculado (opcional)
-   * @returns {Promise<Object>} Resultado de la venta { success, venta, error }
-   */
   const procesarVenta = async (ventaConfig) => {
     if (cart.length === 0) {
       setVentaError("El carrito está vacío");
@@ -126,19 +152,17 @@ export const CartProvider = ({ children }) => {
     setVentaSuccess(null);
 
     try {
-      // Calcular total
       const total = cart.reduce(
-        (acc, item) => acc + item.precio * item.quantity,
+        (acc, item) => acc + Number(item.precio) * Number(item.quantity),
         0,
       );
 
-      // Crear venta en Supabase
       const result = await crearVenta({
         usuario_id: ventaConfig.usuario_id,
         cliente_id: ventaConfig.cliente_id || null,
         forma_pago_id: ventaConfig.forma_pago_id,
         detalles: cart,
-        total: total,
+        total,
         descuento: ventaConfig.descuento || 0,
         iva: ventaConfig.iva || 0,
         observaciones: ventaConfig.observaciones || "",
@@ -151,11 +175,11 @@ export const CartProvider = ({ children }) => {
         clearCart();
         setCreatingVenta(false);
         return { success: true, venta: result.venta };
-      } else {
-        setVentaError(result.error || "Error al procesar la venta");
-        setCreatingVenta(false);
-        return { success: false, error: result.error };
       }
+
+      setVentaError(result.error || "Error al procesar la venta");
+      setCreatingVenta(false);
+      return { success: false, error: result.error };
     } catch (error) {
       const errorMsg = error.message || "Error desconocido al procesar venta";
       setVentaError(errorMsg);
@@ -169,6 +193,8 @@ export const CartProvider = ({ children }) => {
     <CartContext.Provider
       value={{
         cart,
+        items: cart,
+        cartCount: cart.length,
         addToCart,
         decreaseFromCart,
         removeFromCart,
@@ -179,6 +205,8 @@ export const CartProvider = ({ children }) => {
         ventaSuccess,
         setVentaError,
         setVentaSuccess,
+        estaAutenticado,
+        usuario,
       }}
     >
       {children}

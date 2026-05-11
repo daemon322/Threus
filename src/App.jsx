@@ -1,17 +1,27 @@
 import "./App.css";
 import { HashRouter as Router, Routes, Route } from "react-router-dom";
+
 import { CartProvider } from "./context/CartContext";
 import { AuthProvider } from "./context/AuthContext";
+
+import ProtectedRoute from "./components/ProtectedRoute";
+
 import Navbar from "./layouts/Navbar";
 import Footer from "./layouts/Footer";
+import ScrollToTop from "./layouts/ScrollToTop";
+
 import { HomePage } from "./pages/HomePage";
 import CarritoPage from "./pages/CarritoPage";
 import LoginPage from "./pages/LoginPage";
 import ProductosPage from "./pages/ProductosPage";
 import ProductosPorCategoriaPage from "./pages/ProductosPorCategoriaPage";
 import OfertasPage from "./pages/OfertasPage";
+import AdminProductosPage from "./pages/AdminProductosPage";
+import AdminCategoriasPage from "./pages/AdminCategoriasPage";
 
-// Layout wrapper con Navbar y Footer globales
+// ============================================================================
+// LAYOUT
+// ============================================================================
 const Layout = ({ children }) => (
   <div className="flex flex-col min-h-screen">
     <Navbar />
@@ -20,13 +30,18 @@ const Layout = ({ children }) => (
   </div>
 );
 
+// ============================================================================
+// APP
+// ============================================================================
 function App() {
   return (
     <AuthProvider>
       <CartProvider>
         <Router>
+          <ScrollToTop />
+
           <Routes>
-            {/* Rutas con Layout (Navbar + Footer) */}
+            {/* HOME */}
             <Route
               path="/"
               element={
@@ -35,6 +50,8 @@ function App() {
                 </Layout>
               }
             />
+
+            {/* CARRITO */}
             <Route
               path="/carrito"
               element={
@@ -44,7 +61,7 @@ function App() {
               }
             />
 
-            {/* Productos - todas las categorías */}
+            {/* PRODUCTOS */}
             <Route
               path="/productos"
               element={
@@ -54,7 +71,7 @@ function App() {
               }
             />
 
-            {/* Productos por categoría específica */}
+            {/* CATEGORÍAS */}
             <Route
               path="/categoria/:categoriaId"
               element={
@@ -64,7 +81,7 @@ function App() {
               }
             />
 
-            {/* Ofertas */}
+            {/* OFERTAS */}
             <Route
               path="/ofertas"
               element={
@@ -74,11 +91,30 @@ function App() {
               }
             />
 
-            {/* Login sin Layout (pantalla completa) */}
+            {/* LOGIN */}
             <Route path="/login" element={<LoginPage />} />
 
-            {/* Rutas adicionales que crees irán aquí */}
-            {/* <Route path="/admin" element={<Layout><AdminPage /></Layout>} /> */}
+            {/* ADMIN */}
+            <Route
+              path="/admin/productos"
+              element={
+                <ProtectedRoute adminOnly>
+                  <Layout>
+                    <AdminProductosPage />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/categorias"
+              element={
+                <ProtectedRoute adminOnly>
+                  <Layout>
+                    <AdminCategoriasPage />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
           </Routes>
         </Router>
       </CartProvider>

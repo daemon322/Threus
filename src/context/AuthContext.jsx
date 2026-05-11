@@ -1,155 +1,265 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import { supabase } from "../services/supabase";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
+import { supabase } from "../utils/supabase";
+
+// ============================================================================
+// CONTEXT
+// ============================================================================
 const AuthContext = createContext();
 
+// ============================================================================
+// HOOK
+// ============================================================================
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth debe usarse dentro de AuthProvider");
-  }
-  return context;
+  return useContext(AuthContext);
 };
 
+// ============================================================================
+// PROVIDER
+// ============================================================================
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // ==========================================================================
+  // STATES
+  // ==========================================================================
+  const [session, setSession] = useState(null);
+  const [usuario, setUsuario] = useState(null);
 
-  // Verificar sesión al montar
+  // SOLO para hidratación inicial
+  const [loading, setLoading] = useState(true);
+
+  // ==========================================================================
+  // OBTENER PERFIL
+  // ==========================================================================
+  const fetchProfile = async (userId) => {
+    try {
+
+      const { data, error } = await supabase
+        .from("usuarios")
+        .select("*")
+        .eq("auth_user_id", userId)
+        .maybeSingle();
+
+      if (error) {
+        console.error("❌ Error perfil:", error);
+        return null;
+      }
+
+      return data;
+    } catch (err) {
+      console.error("❌ fetchProfile:", err);
+      return null;
+    }
+  };
+
+  // ==========================================================================
+  // INICIALIZAR AUTH
+  // ==========================================================================
   useEffect(() => {
-    const checkSession = async () => {
+    let mounted = true;
+
+    const initializeAuth = async () => {
       try {
+
+        // ====================================================================
+        // RECUPERAR SESIÓN
+        // ====================================================================
         const {
           data: { session },
+          error,
         } = await supabase.auth.getSession();
-        setUser(session?.user || null);
+
+        if (error) {
+          console.error("❌ getSession:", error);
+        }
+
+        if (!mounted) return;
+
+        // ====================================================================
+        // GUARDAR SESSION
+        // ====================================================================
+        setSession(session);
+
+        // ====================================================================
+        // PERFIL (SIN BLOQUEAR APP)
+        // ====================================================================
+        if (session?.user) {
+          fetchProfile(session.user.id)
+            .then((profile) => {
+              if (!mounted) return;
+
+              setUsuario(profile);
+            })
+            .catch((err) => {
+              console.error("❌ Error perfil async:", err);
+            });
+        }
       } catch (err) {
-        console.error("Error al verificar sesión:", err);
-        setError(err.message);
+        console.error("❌ initializeAuth:", err);
       } finally {
-        setLoading(false);
+        // ====================================================================
+        // IMPORTANTE
+        // ====================================================================
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
-    checkSession();
+    initializeAuth();
 
-    // Escuchar cambios de autenticación
+    // =========================================================================
+    // LISTENER AUTH
+    // =========================================================================
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user || null);
-      console.log("Auth event:", event);
-    });
+    } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
 
+        if (!mounted) return;
+
+        // =====================================================================
+        // SESSION
+        // =====================================================================
+        setSession(currentSession);
+
+        // =====================================================================
+        // LOGIN
+        // =====================================================================
+        if (currentSession?.user) {
+          fetchProfile(currentSession.user.id)
+            .then((profile) => {
+              if (!mounted) return;
+
+              setUsuario(profile);
+            })
+            .catch((err) => {
+              console.error("❌ Error perfil listener:", err);
+            });
+        } else {
+          // ===================================================================
+          // LOGOUT
+          // ===================================================================
+          setUsuario(null);
+        }
+      },
+    );
+
+    // =========================================================================
+    // CLEANUP
+    // =========================================================================
     return () => {
-      subscription?.unsubscribe();
+      mounted = false;
+      subscription.unsubscribe();
     };
   }, []);
 
-  /**
-   * Login con Google
-   */
+  // ==========================================================================
+  // LOGIN
+  // ==========================================================================
+  const login = async (email, password) => {
+    try {
+
+      const { error } =
+        await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+      if (error) throw error;
+
+      return {
+        success: true,
+      };
+    } catch (err) {
+      console.error("❌ Login error:", err);
+
+      return {
+        success: false,
+        error: err.message,
+      };
+    }
+  };
+
+  // ==========================================================================
+  // GOOGLE LOGIN
+  // ==========================================================================
   const loginWithGoogle = async () => {
     try {
-      setError(null);
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/Threus`,
-        },
-      });
-
-      if (error) throw error;
-    } catch (err) {
-      setError(err.message);
-      console.error("Error en loginWithGoogle:", err);
-    }
-  };
-
-  /**
-   * Login con email y contraseña
-   */
-  const loginWithEmail = async (email, password) => {
-    try {
-      setError(null);
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-
-      setUser(data.user);
-      return { success: true, user: data.user };
-    } catch (err) {
-      setError(err.message);
-      console.error("Error en loginWithEmail:", err);
-      return { success: false, error: err.message };
-    }
-  };
-
-  /**
-   * Registrarse con email y contraseña
-   */
-  const signUp = async (email, password, fullName) => {
-    try {
-      setError(null);
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
+      const { error } =
+        await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: window.location.origin,
           },
-        },
-      });
+        });
 
       if (error) throw error;
 
-      return { success: true, user: data.user };
+      return {
+        success: true,
+      };
     } catch (err) {
-      setError(err.message);
-      console.error("Error en signUp:", err);
-      return { success: false, error: err.message };
+      console.error("❌ Google login:", err);
+
+      return {
+        success: false,
+        error: err.message,
+      };
     }
   };
 
-  /**
-   * Cerrar sesión
-   */
+  // ==========================================================================
+  // LOGOUT
+  // ==========================================================================
   const logout = async () => {
     try {
-      setError(null);
-      const { error } = await supabase.auth.signOut();
+      await supabase.auth.signOut();
 
-      if (error) throw error;
+      setSession(null);
+      setUsuario(null);
 
-      // 🔒 LIMPIAR DATOS SENSIBLES Y CARRITO DEL USUARIO
-      if (user?.id) {
-        localStorage.removeItem(`cart_${user.id}`);
-      }
-      // No eliminar cart_anonymous para que persista si no está autenticado
-
-      setUser(null);
-      return { success: true };
     } catch (err) {
-      setError(err.message);
-      console.error("Error en logout:", err);
-      return { success: false, error: err.message };
+      console.error("❌ Logout error:", err);
     }
   };
 
+  // ==========================================================================
+  // DEBUG
+  // ==========================================================================
+
+  // ==========================================================================
+  // VALUES
+  // ==========================================================================
   const value = {
-    user,
+    // DATA
+    session,
+    usuario,
     loading,
-    error,
+
+    // AUTH
+    isAuthenticated: !!session,
+    estaAutenticado: !!session,
+
+    // ROLE
+    isAdmin: usuario?.rol === "admin",
+
+    // ACTIONS
+    login,
     loginWithGoogle,
-    loginWithEmail,
-    signUp,
     logout,
-    isAuthenticated: !!user,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  // ==========================================================================
+  // RENDER
+  // ==========================================================================
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
