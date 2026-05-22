@@ -1,5 +1,5 @@
 import "./App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 
 import { CartProvider } from "./context/CartContext";
 import { AuthProvider } from "./context/AuthContext";
@@ -39,9 +39,7 @@ function App() {
   return (
     <AuthProvider>
       <CartProvider>
-        <BrowserRouter>
           <ScrollToTop />
-          <h1>TEST DEPLOY</h1>
 
           <Routes>
             {/* HOME */}
@@ -139,7 +137,6 @@ function App() {
               }
             />
           </Routes>
-        </BrowserRouter>
       </CartProvider>
     </AuthProvider>
   );
