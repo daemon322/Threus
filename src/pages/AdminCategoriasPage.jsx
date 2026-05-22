@@ -1,134 +1,167 @@
 // src/pages/AdminCategoriasPage.jsx
-
 import React, { useState } from "react";
-
 import { useCategorias } from "../hooks/useCategorias";
 import { uploadImage } from "../services/storageService";
 import CategoriaForm from "../components/admin/CategoriaForm";
 import CategoriasTable from "../components/admin/CategoriasTable";
+import ConfirmDialog from "../components/admin/ConfirmDialog";
+import { ToastProvider, useToast } from "../components/admin/Toast";
 
-const AdminCategoriasPage = () => {
+const AdminCategoriasPageContent = () => {
   const {
     categorias,
     loading,
-    error,
-
+    error: fetchError,
     agregarCategoria,
     editarCategoria,
     borrarCategoria,
   } = useCategorias();
 
   const [categoriaEditar, setCategoriaEditar] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null); // categoría a eliminar
+  const [isDeleting, setIsDeleting] = useState(false);
+  const addToast = useToast();
 
-  // ==========================================================================
-  // GUARDAR
-  // ==========================================================================
+  // Guardar / actualizar
   const handleSave = async (categoria) => {
-    let result;
-
-    // ============================================================
-    // SUBIR IMAGEN
-    // ============================================================
     let imagen_url = null;
 
     if (categoria.imagen) {
       const upload = await uploadImage(categoria.imagen, "categorias");
-
       if (!upload.success) {
-        alert(upload.error);
+        addToast(upload.error, "error");
         return;
       }
-
       imagen_url = upload.url;
     }
 
-    // ============================================================
-    // DATA FINAL
-    // ============================================================
     const categoriaData = {
       nombre: categoria.nombre,
       descripcion: categoria.descripcion,
       imagen_url,
     };
 
-    // ============================================================
-    // EDITAR
-    // ============================================================
+    let result;
     if (categoriaEditar) {
       result = await editarCategoria(categoriaEditar.id, categoriaData);
+      if (result.success) {
+        addToast("Categoría actualizada correctamente", "success");
+        setCategoriaEditar(null);
+      } else {
+        addToast(result.error, "error");
+      }
     } else {
-      // ==========================================================
-      // CREAR
-      // ==========================================================
       result = await agregarCategoria(categoriaData);
-    }
-
-    // ============================================================
-    // RESULTADO
-    // ============================================================
-    if (result.success) {
-      setCategoriaEditar(null);
-    } else {
-      alert(result.error);
+      if (result.success) {
+        addToast("Categoría creada exitosamente", "success");
+      } else {
+        addToast(result.error, "error");
+      }
     }
   };
 
-  // ==========================================================================
-  // EDITAR
-  // ==========================================================================
   const handleEdit = (categoria) => {
     setCategoriaEditar(categoria);
+    document.getElementById("categoria-form")?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // ==========================================================================
-  // ELIMINAR
-  // ==========================================================================
-  const handleDelete = async (id) => {
-    const confirmDelete = confirm("¿Eliminar categoría?");
+  // Abre el modal de confirmación
+  const handleRequestDelete = (id) => {
+    setDeleteTarget(id);
+  };
 
-    if (!confirmDelete) return;
+  // Ejecuta eliminación tras confirmar
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
 
-    const result = await borrarCategoria(id);
+    setIsDeleting(true);
+    const result = await borrarCategoria(deleteTarget);
+    setIsDeleting(false);
 
-    if (!result.success) {
-      alert(result.error);
+    if (result.success) {
+      addToast("Categoría eliminada", "success");
+      setDeleteTarget(null);
+    } else {
+      addToast(result.error, "error");
+      setDeleteTarget(null); // cerramos el modal igual
     }
   };
 
-  // ==========================================================================
-  // LOADING
-  // ==========================================================================
+  const handleCancelDelete = () => {
+    if (!isDeleting) setDeleteTarget(null);
+  };
+
   if (loading) {
-    return <div className="p-8">Cargando categorías...</div>;
+    return (
+      <div className="max-w-7xl mx-auto p-6 space-y-6 animate-pulse">
+        <div className="h-10 w-64 bg-gray-200 rounded-lg" />
+        <div className="h-64 bg-gray-100 rounded-2xl" />
+        <div className="h-80 bg-gray-100 rounded-2xl" />
+      </div>
+    );
   }
 
-  // ==========================================================================
-  // ERROR
-  // ==========================================================================
-  if (error) {
-    return <div className="p-8 text-red-500">{error}</div>;
+  if (fetchError) {
+    return (
+      <div className="max-w-7xl mx-auto p-6">
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-red-700">
+          <p className="font-semibold text-lg">Error al cargar categorías</p>
+          <p className="text-sm mt-1">{fetchError}</p>
+        </div>
+      </div>
+    );
   }
 
-  // ==========================================================================
-  // RENDER
-  // ==========================================================================
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
-      <h1 className="text-3xl font-bold">Administración de Categorías</h1>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      {/* Encabezado */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Categorías</h1>
+          <p className="text-gray-500 mt-1">
+            Gestiona las categorías de productos de tu tienda
+          </p>
+        </div>
+        <div className="text-sm text-gray-500">
+          {categorias.length} categoría{categorias.length !== 1 ? "s" : ""}
+        </div>
+      </div>
 
-      <CategoriaForm
-        categoriaEditar={categoriaEditar}
-        onSave={handleSave}
-        onCancel={() => setCategoriaEditar(null)}
-      />
+      {/* Formulario */}
+      <div id="categoria-form">
+        <CategoriaForm
+          categoriaEditar={categoriaEditar}
+          onSave={handleSave}
+          onCancel={() => setCategoriaEditar(null)}
+        />
+      </div>
 
+      {/* Tabla */}
       <CategoriasTable
         categorias={categorias}
         onEdit={handleEdit}
-        onDelete={handleDelete}
+        onDelete={handleRequestDelete} // ahora solo abre modal
+      />
+
+      {/* Modal de confirmación */}
+      <ConfirmDialog
+        isOpen={deleteTarget !== null}
+        title="Eliminar categoría"
+        message="¿Estás seguro de que deseas eliminar esta categoría permanentemente? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+        isLoading={isDeleting}
       />
     </div>
   );
 };
+
+const AdminCategoriasPage = () => (
+  <ToastProvider>
+    <AdminCategoriasPageContent />
+  </ToastProvider>
+);
 
 export default AdminCategoriasPage;

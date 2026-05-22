@@ -1,5 +1,5 @@
 import "./App.css";
-import { HashRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import { CartProvider } from "./context/CartContext";
 import { AuthProvider } from "./context/AuthContext";
@@ -18,6 +18,8 @@ import ProductosPorCategoriaPage from "./pages/ProductosPorCategoriaPage";
 import OfertasPage from "./pages/OfertasPage";
 import AdminProductosPage from "./pages/AdminProductosPage";
 import AdminCategoriasPage from "./pages/AdminCategoriasPage";
+import CheckoutPage from "./pages/CheckoutPage";
+import HistorialVentasPage from "./pages/HistorialVentasPage";
 
 // ============================================================================
 // LAYOUT
@@ -37,7 +39,7 @@ function App() {
   return (
     <AuthProvider>
       <CartProvider>
-        <Router>
+        <BrowserRouter>
           <ScrollToTop />
 
           <Routes>
@@ -91,6 +93,16 @@ function App() {
               }
             />
 
+            {/* CHECKOUT */}
+            <Route
+              path="/checkout"
+              element={
+                <Layout>
+                  <CheckoutPage/>
+                </Layout>
+              }
+            />
+
             {/* LOGIN */}
             <Route path="/login" element={<LoginPage />} />
 
@@ -115,8 +127,18 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/admin/historial"
+              element={
+                <ProtectedRoute adminOnly>
+                  <Layout>
+                    <HistorialVentasPage />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
           </Routes>
-        </Router>
+        </BrowserRouter>
       </CartProvider>
     </AuthProvider>
   );
