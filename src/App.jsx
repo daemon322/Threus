@@ -41,6 +41,7 @@ function App() {
       <CartProvider>
         <BrowserRouter>
           <ScrollToTop />
+          <h1>TEST DEPLOY</h1>
 
           <Routes>
             {/* HOME */}
